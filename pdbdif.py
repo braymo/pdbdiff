@@ -4,75 +4,51 @@
 import os
 import requests
 import argparse
-import sys
-API_KEY = os.environ.get("API_KEY")
 from tabulate import tabulate
-auth = {"Authorization": "Api-Key " + API_KEY}
-import csv
 
+API_KEY = os.environ.get("API_KEY")
+auth = {"Authorization": "Api-Key " + API_KEY}
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--ix-list', type=str, help='List of numeric IX IDs to be used in the script', required=True)
+parser.add_argument('ix1_id', type=int, help='Numeric ID for the first IXP')
+parser.add_argument('ix2_id', type=int, help='Numeric ID for the second IXP')
 args = parser.parse_args()
 
-ixes = [ix.strip() for ix in args.ix_list.split(',')]
+# Retrieve data for the first IXP
+url1 = f'https://www.peeringdb.com/api/netixlan?ix_id={args.ix1_id}&fields=asn&pretty'
+response1 = requests.get(url1, headers=auth)
 
-def ix_members(ixid):
+if response1.status_code != 200:
+    print(f'Error: {response1.status_code}')
+    exit(1)
 
-    members = {}
-    r = requests.get('https://www.peeringdb.com/api/ixlan/{}'.format(ixid), headers=auth)
+asns1 = set()
+for entry in response1.json()['data']:
+    asn = entry.get('asn')
+    if asn is not None:
+        asns1.add(str(asn).replace('\n', ','))
 
-    if r.status_code != 200:
-        print(r.text)
-        sys.exit(1)
-    ixl_data = r.json()
+# Retrieve data for the second IXP
+url2 = f'https://www.peeringdb.com/api/netixlan?ix_id={args.ix2_id}&fields=asn&pretty'
+response2 = requests.get(url2, headers=auth)
 
+if response2.status_code != 200:
+    print(f'Error: {response2.status_code}')
+    exit(1)
 
-    for member in ixl_data['data'][0]['net_set']:
-        members[member['asn']] = member['name']
+asns2 = set()
+for entry in response2.json()['data']:
+    asn = entry.get('asn')
+    if asn is not None:
+        asns2.add(str(asn).replace('\n', ','))
 
-    return members
+# Compute unique ASNs for each IXP
+unique_asns1 = asns1.difference(asns2)
+unique_asns2 = asns2.difference(asns1)
 
-ix_nets = {}
-for ix in ixes:
-    ix_nets[ix] = ix_members(ix)
+# Print CSV to screen for each IXP
+print(f'IXP {args.ix1_id} - Total Unique ASNs: {len(unique_asns1)}\n')
+print(','.join(unique_asns1))
 
-asns = {}
-for k in ix_nets:
-    net1 = ix_nets[k]
-    for asn in net1:
-        name = net1[asn]
-        if asn not in asns:
-            asns[asn] = {'name': name, 'ixes': {}}
-        asns[asn]['ixes'][k] = True
-
-# Here we create a new dict where the key is the IX id and the value is a list of all ASNs in the IX.
-data = {}
-for ix in ixes:
-    data[ix] = []
-    for asn in [ x for x in asns if len(asns[x]['ixes']) == 1 ]:
-        if ix in asns[asn]['ixes']:
-            data[ix].append(asn)
-
-# Here we iterate over our list of IX ids so we can pull the list of asns we generated previously so we can use them for comparison to find out if it's unique to this IX.
-for ix in ixes:
-    uniq_asn_list = []
-    # Iterating over the ASNs in our new dict here.
-    for asn in data[ix]:
-        # I create a counter to be used later on. It will increment if an ASN is found to be in another IX, making it NOT unique.
-        count = 0
-        # Iterate over the list of IXs again so we can compare their ASN lists'.
-        for _ix in ixes:
-            # We don't want to compare against the IX that we know they're in so we skip it.
-            if _ix == ix:
-                continue
-            # We find an ASN that's in the current IX and in another so it's NOT unique. Increment the counter.
-            if asn in data[_ix]:
-                count += 1
-        # We will know if an ASN is unique if its count is 0 because it will not have been found in the other IXs, thus not have a greater number per our logic.
-        if count == 0:
-            uniq_asn_list.append(asn)
-    print("\n\nThe following ASNs are unique to IX ID %s\n\n"% ix)
-    #for asn in uniq_asn_list:
-        #print(asn)
-    print(",".join(str(asn) for asn in uniq_asn_list))
+print(f'\nIXP {args.ix2_id} - Total Unique ASNs: {len(unique_asns2)}\n')
+print(','.join(unique_asns2))
