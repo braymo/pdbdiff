@@ -7,7 +7,6 @@ import argparse
 import sys
 API_KEY = os.environ.get("API_KEY")
 from tabulate import tabulate
-#data = [[uniq_asn_list]]
 auth = {"Authorization": "Api-Key " + API_KEY}
 import csv
 
