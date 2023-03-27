@@ -43,7 +43,7 @@ for entry in response2.json()['data']:
     asn = entry.get('asn')
     if asn is not None:
         asns2.add(str(asn).replace('\n', ','))
-for entry in response1.json()['data']:
+for entry in response2.json()['data']:
     name2 = entry.get('name')
 
 # Compute unique ASNs for each IXP
